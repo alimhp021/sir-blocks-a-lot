@@ -1,0 +1,8 @@
+
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+pyrogram
+v2ray2proxy
+pydantic-settings
