@@ -1,10 +1,10 @@
 # app/routers/crawler_router.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from .. import schemas
-from ..database import get_db
-from ..controllers import crawler_controller
-from ..config import settings
+from app import schemas # <-- CORRECTED IMPORT
+from app.database import get_db # <-- CORRECTED IMPORT
+from app.controllers import crawler_controller # <-- CORRECTED IMPORT
+from app.config import settings # <-- CORRECTED IMPORT
 
 router = APIRouter()
 
@@ -18,5 +18,4 @@ async def crawl_channels(db: Session = Depends(get_db)):
             channels_crawled=settings.channel_list
         )
     except Exception as e:
-        # In a real app, you'd have more specific error handling
         raise HTTPException(status_code=500, detail=str(e))

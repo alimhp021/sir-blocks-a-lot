@@ -3,18 +3,15 @@ from pydantic_settings import BaseSettings
 from typing import List
 
 class Settings(BaseSettings):
-    # Database
     db_type: str
     db_username: str
     db_password: str
     db_host: str
     db_name: str
-
-    # Telegram
     api_id: int
     api_hash: str
-    vless_url: str | None = None
     channels_to_crawl: str
+    warehouse_channel_id: int # <-- This line is new
 
     @property
     def database_url(self) -> str:
