@@ -28,12 +28,18 @@ async def run_crawl_cycle(db: Session):
                 final_messages = [m for m in messages_to_add if m.message_id not in existing_ids]
 
                 if final_messages:
-                    # --- THIS IS THE NEW LOGIC ---
+                    # --- UPDATED LOGIC WITH HYPERLINKS ---
                     # Forward messages before saving them to the DB
                     for msg in reversed(final_messages): # Send oldest first
-                        warehouse_text = f"--- New Message from: {msg.channel_name} ---\n\n{msg.message_text}"
-                        await tg_service.send_to_warehouse(warehouse_text)
-                    # --- END OF NEW LOGIC ---
+                        warehouse_text = f"📢 **New Message from: {msg.channel_name}**\n\n{msg.message_text}"
+                        
+                        # Pass channel name and message ID to create hyperlink
+                        await tg_service.send_to_warehouse(
+                            message_text=warehouse_text,
+                            channel_name=msg.channel_name,
+                            message_id=msg.message_id
+                        )
+                    # --- END OF UPDATED LOGIC ---
 
                     db.add_all(reversed(final_messages))
                     total_new_messages_saved += len(final_messages)

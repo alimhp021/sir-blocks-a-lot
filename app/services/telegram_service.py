@@ -38,13 +38,42 @@ class TelegramService:
                     )
         return messages_to_add, newest_id_in_batch
 
-    async def send_to_warehouse(self, message_text: str):
-        """Sends a message to the configured warehouse channel."""
+    def create_message_link(self, channel_name: str, message_id: int) -> str:
+        """
+        Create a Telegram message link for the given channel and message ID.
+        
+        Args:
+            channel_name: The channel username (without @)
+            message_id: The message ID
+            
+        Returns:
+            A clickable Telegram link to the specific message
+        """
+        # Remove @ if present in channel name
+        clean_channel_name = channel_name.lstrip('@')
+        return f"https://t.me/{clean_channel_name}/{message_id}"
+
+    async def send_to_warehouse(self, message_text: str, channel_name: str = None, message_id: int = None):
+        """
+        Sends a message to the configured warehouse channel.
+        
+        Args:
+            message_text: The message content to forward
+            channel_name: Optional channel name to create a link back to original message
+            message_id: Optional message ID to create a link back to original message
+        """
         if settings.warehouse_channel_id:
             try:
+                # Add hyperlink if channel and message ID are provided
+                final_message = message_text
+                if channel_name and message_id:
+                    message_link = self.create_message_link(channel_name, message_id)
+                    final_message = f"{message_text}\n\n🔗 [View Original Message]({message_link})"
+                
                 await self.client.send_message(
                     chat_id=settings.warehouse_channel_id,
-                    text=message_text
+                    text=final_message,
+                    parse_mode="Markdown"  # Enable markdown for clickable links
                 )
             except Exception as e:
                 print(f"Failed to forward message to warehouse: {e}")
