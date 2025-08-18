@@ -1,4 +1,5 @@
 # app/controllers/crawler_controller.py
+import asyncio
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.models import ChannelState, BareMessage
@@ -28,9 +29,9 @@ async def run_crawl_cycle(db: Session):
                 final_messages = [m for m in messages_to_add if m.message_id not in existing_ids]
 
                 if final_messages:
-                    # --- UPDATED LOGIC WITH HYPERLINKS ---
+                    # --- UPDATED LOGIC WITH HYPERLINKS AND RATE LIMITING ---
                     # Forward messages before saving them to the DB
-                    for msg in reversed(final_messages): # Send oldest first
+                    for i, msg in enumerate(reversed(final_messages)): # Send oldest first
                         warehouse_text = f"📢 **New Message from: {msg.channel_name}**\n\n{msg.message_text}"
                         
                         # Pass channel name and message ID to create hyperlink
@@ -39,6 +40,12 @@ async def run_crawl_cycle(db: Session):
                             channel_name=msg.channel_name,
                             message_id=msg.message_id
                         )
+                        
+                        # Add delay between messages to prevent rate limiting
+                        # Skip delay for the last message
+                        if i < len(final_messages) - 1:
+                            print(f"⏱️ Waiting {settings.message_delay_seconds} seconds before next message to avoid rate limiting...")
+                            await asyncio.sleep(settings.message_delay_seconds)
                     # --- END OF UPDATED LOGIC ---
 
                     db.add_all(reversed(final_messages))

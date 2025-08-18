@@ -1,6 +1,8 @@
 # app/services/telegram_service.py
 from typing import List, Tuple
+import asyncio
 from pyrogram import Client
+from pyrogram.errors import FloodWait
 from app.config import settings
 from app.models import BareMessage
 
@@ -55,42 +57,64 @@ class TelegramService:
 
     async def send_to_warehouse(self, message_text: str, channel_name: str = None, message_id: int = None):
         """
-        Sends a message to the configured warehouse channel.
+        Sends a message to the configured warehouse channel with proper rate limiting.
         
         Args:
             message_text: The message content to forward
             channel_name: Optional channel name to create a link back to original message
             message_id: Optional message ID to create a link back to original message
         """
-        if settings.warehouse_channel_id:
+        if not settings.warehouse_channel_id:
+            return
+            
+        # Add hyperlink if channel and message ID are provided
+        final_message = message_text
+        if channel_name and message_id:
+            message_link = self.create_message_link(channel_name, message_id)
+            final_message = f"{message_text}\n\n🔗 [View Original Message]({message_link})"
+        
+        max_retries = settings.max_send_retries
+        retry_count = 0
+        
+        while retry_count < max_retries:
             try:
-                # Add hyperlink if channel and message ID are provided
-                final_message = message_text
-                if channel_name and message_id:
-                    message_link = self.create_message_link(channel_name, message_id)
-                    final_message = f"{message_text}\n\n🔗 [View Original Message]({message_link})"
+                # Try Markdown first
+                from pyrogram import enums
+                await self.client.send_message(
+                    chat_id=settings.warehouse_channel_id,
+                    text=final_message,
+                    parse_mode=enums.ParseMode.MARKDOWN
+                )
+                print(f"✅ Successfully sent message to warehouse (attempt {retry_count + 1})")
+                return  # Success - exit the function
                 
-                # Try with different parse modes, fallback to plain text if needed
+            except FloodWait as e:
+                print(f"⏱️ Rate limited: waiting {e.value} seconds before retry {retry_count + 1}/{max_retries}")
+                await asyncio.sleep(e.value)
+                retry_count += 1
+                continue
+                
+            except Exception as parse_error:
+                # Try HTML as fallback
                 try:
-                    from pyrogram import enums
+                    html_message = f"{message_text}\n\n🔗 <a href=\"{self.create_message_link(channel_name, message_id)}\">View Original Message</a>" if channel_name and message_id else message_text
                     await self.client.send_message(
                         chat_id=settings.warehouse_channel_id,
-                        text=final_message,
-                        parse_mode=enums.ParseMode.MARKDOWN
+                        text=html_message,
+                        parse_mode=enums.ParseMode.HTML
                     )
-                except Exception as parse_error:
-                    print(f"Markdown parsing failed: {parse_error}")
-                    # Try HTML parse mode as alternative
+                    print(f"✅ Successfully sent message to warehouse using HTML (attempt {retry_count + 1})")
+                    return  # Success - exit the function
+                    
+                except FloodWait as e:
+                    print(f"⏱️ Rate limited during HTML attempt: waiting {e.value} seconds before retry {retry_count + 1}/{max_retries}")
+                    await asyncio.sleep(e.value)
+                    retry_count += 1
+                    continue
+                    
+                except Exception as html_error:
+                    # Final fallback: plain text
                     try:
-                        html_message = f"{message_text}\n\n🔗 <a href=\"{self.create_message_link(channel_name, message_id)}\">View Original Message</a>" if channel_name and message_id else message_text
-                        await self.client.send_message(
-                            chat_id=settings.warehouse_channel_id,
-                            text=html_message,
-                            parse_mode=enums.ParseMode.HTML
-                        )
-                    except Exception as html_error:
-                        print(f"HTML parsing also failed: {html_error}")
-                        # Final fallback: send with plain text and URL on separate line
                         if channel_name and message_id:
                             message_link = self.create_message_link(channel_name, message_id)
                             fallback_message = f"{message_text}\n\n🔗 View Original Message:\n{message_link}"
@@ -101,9 +125,21 @@ class TelegramService:
                             chat_id=settings.warehouse_channel_id,
                             text=fallback_message
                         )
-                    
-            except Exception as e:
-                print(f"Failed to forward message to warehouse: {e}")
+                        print(f"✅ Successfully sent message to warehouse using plain text (attempt {retry_count + 1})")
+                        return  # Success - exit the function
+                        
+                    except FloodWait as e:
+                        print(f"⏱️ Rate limited during plain text attempt: waiting {e.value} seconds before retry {retry_count + 1}/{max_retries}")
+                        await asyncio.sleep(e.value)
+                        retry_count += 1
+                        continue
+                        
+                    except Exception as final_error:
+                        print(f"❌ All formatting attempts failed: {final_error}")
+                        break
+        
+        # If we get here, all retries failed
+        print(f"❌ Failed to send message to warehouse after {max_retries} attempts")
 
     async def __aenter__(self):
         await self.client.start()

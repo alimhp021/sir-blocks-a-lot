@@ -11,7 +11,11 @@ class Settings(BaseSettings):
     api_id: int
     api_hash: str
     channels_to_crawl: str
-    warehouse_channel_id: int # <-- This line is new
+    warehouse_channel_id: int
+    
+    # Rate limiting settings (optional)
+    message_delay_seconds: int = 2  # Delay between forwarded messages
+    max_send_retries: int = 3       # Maximum retries for failed sends
 
     @property
     def database_url(self) -> str:
