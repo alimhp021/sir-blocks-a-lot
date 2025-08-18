@@ -72,24 +72,35 @@ class TelegramService:
                 
                 # Try with different parse modes, fallback to plain text if needed
                 try:
+                    from pyrogram import enums
                     await self.client.send_message(
                         chat_id=settings.warehouse_channel_id,
                         text=final_message,
-                        parse_mode="markdown"
+                        parse_mode=enums.ParseMode.MARKDOWN
                     )
                 except Exception as parse_error:
                     print(f"Markdown parsing failed: {parse_error}")
-                    # Fallback: send with plain text and URL on separate line
-                    if channel_name and message_id:
-                        message_link = self.create_message_link(channel_name, message_id)
-                        fallback_message = f"{message_text}\n\n🔗 View Original Message:\n{message_link}"
-                    else:
-                        fallback_message = message_text
-                    
-                    await self.client.send_message(
-                        chat_id=settings.warehouse_channel_id,
-                        text=fallback_message
-                    )
+                    # Try HTML parse mode as alternative
+                    try:
+                        html_message = f"{message_text}\n\n🔗 <a href=\"{self.create_message_link(channel_name, message_id)}\">View Original Message</a>" if channel_name and message_id else message_text
+                        await self.client.send_message(
+                            chat_id=settings.warehouse_channel_id,
+                            text=html_message,
+                            parse_mode=enums.ParseMode.HTML
+                        )
+                    except Exception as html_error:
+                        print(f"HTML parsing also failed: {html_error}")
+                        # Final fallback: send with plain text and URL on separate line
+                        if channel_name and message_id:
+                            message_link = self.create_message_link(channel_name, message_id)
+                            fallback_message = f"{message_text}\n\n🔗 View Original Message:\n{message_link}"
+                        else:
+                            fallback_message = message_text
+                        
+                        await self.client.send_message(
+                            chat_id=settings.warehouse_channel_id,
+                            text=fallback_message
+                        )
                     
             except Exception as e:
                 print(f"Failed to forward message to warehouse: {e}")
